@@ -1,0 +1,19 @@
+# How to convert a lat(deg.)-lon(deg.)-depth(km) file to long(rad.)-colatitude(rad.)-depth(m)
+
+awk '{print (90-180*$2/3.141592653589793),$1*180/3.141592653589793,$3/1000}' Emry.litho.aspect.input.txt  > tmp
+# Now we sort in increasing order the second column
+sort -k2,2n tmp > new_lab.txt 
+# Now we need the number of unique long. and unique colatitude
+# So in matlab: load the file i.e.
+ D = load('new_lab.txt')
+length(unique(D(:,1)))
+length(unique(D(:,2)))
+# e.g. length(unique(D(:,1))) = 17 and length(unique(D(:,2))) = 17
+
+# Then vi new_lab.txt and copy the new header: # POINTS: 17 17
+
+# POINTS: 17 17
+0.453786 1.67552 50.0265
+0.466876 1.67552 68.646
+0.479966 1.67552 87.8796
+0.493056 1.67552 108.172

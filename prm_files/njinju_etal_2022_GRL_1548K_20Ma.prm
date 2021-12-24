@@ -1,0 +1,287 @@
+# Model setup for mantle convection in a 3D box without melting.
+# This file is used as a starting point for a cookbook that 
+# explains how to add melting and melt transport to a mantle
+# convection simulation. 
+
+set Dimension                              = 3
+#set Adiabatic surface temperature          = 1613
+set Maximum time step                      = 1e5
+set Output directory                       = /home/njinju85/projects/outputs/njinju_etal_2022_GRL_1548K_20Ma
+set Use years in output instead of seconds = true
+#set Nonlinear solver scheme                = no Advection, no Stokes
+set Nonlinear solver scheme                = iterated Advection and Stokes
+set Nonlinear solver tolerance             = 1e-2
+set Max nonlinear iterations               = 500
+#set Pressure normalization                 = no
+set Pressure normalization                 = surface
+set Surface pressure                       = 1.01325e5
+#set Resume computation                     = true
+
+# This model uses the anelastic liquid approximation.
+subsection Formulation
+  set Formulation = anelastic liquid approximation
+end
+
+# The end time of the simulation. Because we want to see how upwellings
+# and downwellings evolve over time, and if differences develop between 
+# the model with and without melt migration, we set the end time to 40 Ma.
+set End time                               = 2e7
+
+# We choose a stricter than default linear Stokes solver tolerance,
+# to be consistent with the global_melt cookbook.
+subsection Solver parameters
+  subsection Stokes solver parameters
+    set Linear solver tolerance = 1e-2
+    set Number of cheap Stokes solver steps = 500
+  end
+end
+
+# We fix prescribe free-slip boundary conditions on all
+# sides. 
+subsection Boundary velocity model
+  set Tangential velocity boundary indicators = outer
+  set Zero velocity boundary indicators = inner, west, east, south, north
+end
+
+# We also choose relatively large values for the stabilization parameters:
+# The model resolution is very coarse (in order for this model to run in a 
+# short time), so we want to make sure that no temperature over- and 
+# undershoots will develop. In a model with melting this would be 
+# particularly problematic, as large amounts of melt could be generated
+# by temperature spikes, and we want to be consistent between the model
+# with and without melt transport. 
+
+subsection Discretization
+ set Stokes velocity polynomial degree= 2
+ set Temperature polynomial degree = 2
+  set Composition polynomial degree           = 2
+ subsection Stabilization parameters
+   set Use artificial viscosity smoothing = true
+    set alpha = 2
+    set beta  = 0.117 #0.078
+    set cR    = 0.5   # default: 0.11
+ end
+end
+
+##################### Initial conditions ########################
+
+# We choose an adiabatic temperature profile as initial condition,
+# with conductive temperature profiles in the top and bottom boundary 
+# layers, which were computed using a half space cooling model. 
+# The cold top boundary layer corresponds to an age of 300 Ma, 
+# and the hot top boundary layer corresponds to an age of 500 Ma.
+# A small temperature perturbation is added at the bottom of the 
+# domain. To make the model asymmetric, we place it in a distance of
+# x = 2900 km from the left boundary. 
+# Temperatures from both initial temperature models we specify are
+# added (by default). 
+##subsection Initial temperature model
+  ##set List of model names = adiabatic, function
+  ##subsection Adiabatic
+    ##set Age bottom boundary layer = 5e8
+    ##set Age top boundary layer    = 3e8
+
+    ##subsection Function
+      ##set Function expression       = 0;0
+    ##end
+  ##end
+
+  ##subsection Function
+    ##set Function constants        = r=350000, amplitude=50
+    ##set Function expression       = if((x-2900000)*(x-2900000)+y*y<r,amplitude,0)
+  ##end
+##end
+
+subsection Initial temperature model
+   set Model name = potential temperature
+  subsection Potential temperature
+    subsection LAB file
+    end
+  subsection Tomography file
+   end
+      set Mantle potential temperature = 1548.0
+#      set LAB isotherm temperature = 1693.0
+#      set Adiabatic temperature gradient = 0.0004
+end
+end
+
+
+subsection Compositional fields
+  set Number of fields = 4
+  set Names of fields  = crust, mantle_lithosphere, porosity, peridotite
+end
+
+subsection Initial composition model
+   set Model name = lithosphere asthenosphere
+subsection Lithosphere asthenosphere
+subsection LAB file
+end
+end
+end
+##################### Boundary conditions ########################
+
+# As boundary conditions for the temperature, we just use the
+# initial conditions again. This temperature is applied as a prescribed
+# temperature at the top and bottom boundary.
+subsection Boundary temperature model
+  set Fixed temperature boundary indicators = inner, outer
+  set List of model names = initial temperature
+  subsection Initial temperature
+  end
+end
+
+##################### Model geometry ########################
+
+# The model geometry is a box with an aspect ratio of 3, 
+# extending to the base of the mantle in vertical direction.
+##subsection Geometry model
+  ##set Model name = box
+
+  ##subsection Box
+   ## set X extent = 8700000
+    ##set Y extent = 2900000
+    ##set X repetitions = 3
+  ##end
+
+##end
+
+subsection Geometry model
+  set Model name = chunk
+
+  subsection Chunk
+    set Chunk minimum longitude = 30  # 32.5  #30
+    set Chunk maximum longitude = 37  # 33.5   #37
+    set Longitude repetitions   = 1
+    set Chunk minimum latitude = -14  #-9.5  #-14
+    set Chunk maximum latitude = -6   #-8.5  #-6
+    set Chunk inner radius = 5718137
+    set Chunk outer radius = 6378137
+    set Radius repetitions      = 1
+  end
+
+end
+
+################ Gravity and material properties ##################
+
+# The gravity model is derived from the ascii data of the PREM. 
+# Another example could be a constant gravity of 9.81 m/s2. 
+subsection Gravity model
+  set Model name = ascii data
+end
+
+# We use the melt global material model, which is one of the
+# material models that works with melt transport, as it also
+# specifies the material properties needed for melt migration, 
+# such as the permeability, the melt density and the melt 
+# viscosity.
+# It also works without melt transport, and in this case these
+# properties are not used, so we do not have to specify them 
+# here.  
+subsection Material model
+
+#  set Model name = melt global 
+   set Model name = edc melting 
+#  subsection Melt global
+  subsection Edc melting
+#    set Thermal conductivity              = 4.7
+    set Reference solid density           = 3400
+    set Thermal expansion coefficient     = 3e-5
+    set Reference shear viscosity         = 5e21
+    set Thermal viscosity exponent        = 7
+    set Reference temperature             = 1548
+    set Solid compressibility             = 4.2e-12
+#    set Surface solidus                   = 1300
+
+    set Grain size                        = 0.01
+    set Activation volume for diffusion creep     = 6e-6
+    set Activation volume for dislocation creep     = 25e-6
+#    set Activation volume for dislocation creep     = 14e-6
+#    set Prefactor for diffusion creep     = 1.5e-15
+    set Prefactor for diffusion creep     = 4.5e-15
+    set Prefactor for dislocation creep     = 7.4e-15
+#    set Prefactor for dislocation creep     = 6.52e-16
+    set Grain size exponent for diffusion creep     = 3
+#    set Activation energie for diffusion creep     = 3.75e5
+    set Activation energie for diffusion creep     = 4.25e5
+    set Activation energie for dislocation creep     = 5.3e5
+    set Stress exponent for dislocation creep     = 3.5
+    set Viscosity averaging scheme     = geometric
+#end
+#    set Material averaging = harmonic average
+
+  end
+end
+
+##################### Mesh refinement #########################
+
+# For the model without melt migration, we do not have to use 
+# mesh adaptivity, because time- and length scales of material 
+# motion does do not vary a lot across the model, and a global 
+# resolution of 4 is sufficient to capture the behaviour of
+# upwellings and downwellings.
+subsection Mesh refinement
+#  set Coarsening fraction = 0.5
+#  set Refinement fraction = 0.5
+  set Initial adaptive refinement              = 0
+  set Initial global refinement                = 6
+  set Time steps between mesh refinement       = 0
+end
+
+# As the model is compressible and has an adiabatic temperature profile, we include 
+# adiabatic heating in the list of heating models. 
+# To make this model as simple as possible, we do not include shear heating (although
+# usually, adiabatic heating and shear heating should always be used together).   
+subsection Heating model
+  set List of model names = adiabatic heating, shear heating , latent heat melt
+
+  subsection Adiabatic heating
+    set Use simplified adiabatic heating = true
+  end
+end 
+
+##################### Postprocessing ########################
+
+# In addition to the visualization output, we select a number 
+# of postprocessors that allow us to compute some statistics
+# about the output (to see how much the model without and the
+# model with melt migration differ), and in particular we use
+# the "depth average" postprocessor that will allow us to plot
+# depth-averaged model quantities over time. 
+subsection Postprocess
+  set List of postprocessors = visualization, composition statistics, velocity statistics, temperature statistics, melt statistics, depth average
+
+  # For the model without melt migration, we only compute the 
+  # equilibrium melt fraction in dependence of temperature and 
+  # pressure. This is done as a postprocessing step, by adding
+  # "melt fraction" to the list of material properties in the 
+  # corresponding visualization postprocessor.
+
+  subsection Visualization
+    set List of output variables      = material properties, nonadiabatic temperature
+
+    subsection Material properties
+      set List of material properties = density, viscosity, melt fraction
+    end
+
+    set Number of grouped files       = 0
+    set Output format                 = vtu
+    set Time between graphical output = 6e3
+   # set Time between graphical output = 6e5
+    set Interpolate output            = true
+  end
+
+  subsection Depth average
+    set Number of zones = 20
+    set Time between graphical output = 6e3
+   # set Time between graphical output = 6e5
+  end
+
+end
+
+# We write a checkpoint approximately every half an hour, 
+# so that we are able to restart the computation from that
+# point. 
+subsection Checkpointing
+  set Time between checkpoint = 1700
+end
+
